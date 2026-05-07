@@ -31,6 +31,3 @@ desktop.ini
 *.json
 *.html
 !dashboard.html
-
-# PyInstaller
-GradeReport.exe
