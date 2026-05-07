@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GradeReport — Генератор отчётов из PDF-журнала</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:#f0f2f5;color:#333;line-height:1.6}
+.container{max-width:900px;margin:0 auto;padding:20px}
+.hero{background:linear-gradient(135deg,#1a237e,#283593);color:#fff;padding:40px 30px;border-radius:16px;margin-bottom:30px;text-align:center}
+.hero h1{font-size:32px;margin-bottom:10px}
+.hero p{opacity:.9;font-size:16px}
+.btn{display:inline-block;background:#fff;color:#1a237e;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600;margin:10px 5px;transition:all .2s}
+.btn:hover{background:#e8eaf6;transform:translateY(-2px)}
+.btn-ghost{background:transparent;color:#fff;border:2px solid rgba(255,255,255,.5)}
+.btn-ghost:hover{background:rgba(255,255,255,.1)}
+.card{background:#fff;border-radius:12px;padding:24px;margin-bottom:20px;box-shadow:0 2px 8px rgba(0,0,0,.08)}
+.card h2{color:#1a237e;margin-bottom:12px;font-size:20px}
+.card h3{color:#333;margin:16px 0 8px;font-size:16px}
+.card p{color:#555;margin-bottom:8px}
+.card ul{margin-left:20px;color:#555}
+.card li{margin-bottom:4px}
+.code{background:#f5f5f5;padding:12px 16px;border-radius:8px;font-family:Consolas,monospace;font-size:13px;overflow-x:auto;margin:10px 0}
+.steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin:20px 0}
+.step{background:#f8f9fa;padding:20px;border-radius:10px;text-align:center}
+.step .num{font-size:32px;font-weight:700;color:#1a237e}
+.step .txt{font-size:14px;color:#666;margin-top:8px}
+.screenshot{background:#e8eaf6;border-radius:12px;padding:40px;text-align:center;margin:20px 0;color:#1a237e;font-size:14px}
+footer{text-align:center;padding:20px;color:#999;font-size:13px}
+a{color:#1a237e}
+@media(max-width:600px){.hero h1{font-size:24px}.hero p{font-size:14px}.steps{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="container">
+<div class="hero">
+<h1>GradeReport</h1>
+<p>Генератор отчётов успеваемости из PDF-журналов электронного дневника</p>
+<div style="margin-top:20px">
+<a href="https://github.com/Altersam/eljur_class_report/releases" class="btn" target="_blank">⬇ Скачать GradeReport.exe</a>
+<a href="http://altersam.github.io/eljur_class_report/dashboard.html" class="btn btn-ghost" target="_blank">📊 Демо дашборда</a>
+<a href="https://github.com/Altersam/eljur_class_report" class="btn btn-ghost" target="_blank">GitHub</a>
+</div>
+</div>
+
+<div class="card">
+<h2>Что это?</h2>
+<p>GradeReport — бесплатная утилита для автоматического создания отчётов из PDF-журналов электронного дневника. Программа извлекает данные об учениках, предметах, оценках и учителях, а затем генерирует:</p>
+<ul>
+<li><strong>Excel (.xlsx)</strong> — сводная таблица средних баллов и детальный лист с оценками и пропусками (НКИ)</li>
+<li><strong>JSON (.json)</strong> — структурированные данные для дальнейшей обработки</li>
+<li><strong>HTML (.html)</strong> — интерактивный дашборд с графиками, полностью автономный</li>
+</ul>
+</div>
+
+<div class="card">
+<h2>Как использовать</h2>
+<div class="steps">
+<div class="step"><div class="num">1</div><div class="txt">Скачайте <code>GradeReport.exe</code></div></div>
+<div class="step"><div class="num">2</div><div class="txt">Запустите и перетащите PDF-журнал в окно</div></div>
+<div class="step"><div class="num">3</div><div class="txt">Выберите папку и форматы отчётов</div></div>
+<div class="step"><div class="num">4</div><div class="txt">Нажмите «Сгенерировать»</div></div>
+</div>
+<div class="screenshot" style="padding:0;overflow:hidden">
+<img src="Скриншот интерфейса программы.png" alt="Скриншот интерфейса GradeReport" style="max-width:100%;border-radius:12px">
+</div>
+</div>
+
+<div class="card">
+<h2>Требования</h2>
+<p><strong>Windows 10/11</strong> — других зависимостей нет. Программа полностью автономна (~66 MB).</p>
+<h3>Для разработчиков (Python)</h3>
+<div class="code">
+pip install pymupdf openpyxl PyQt5<br>
+python gui.py
+</div>
+</div>
+
+<div class="card">
+<h2>Сборка из исходников</h2>
+<div class="code">
+git clone https://github.com/Altersam/eljur_class_report.git<br>
+cd eljur_class_report<br>
+pip install pymupdf openpyxl PyQt5 pyinstaller<br>
+pyinstaller --clean --onefile --windowed --name GradeReport --add-data "dashboard.html;." gui.py
+</div>
+<p>Результат: <code>dist/GradeReport.exe</code></p>
+</div>
+
+<div class="card">
+<h2>Формат PDF</h2>
+<p>Программа ожидает стандартный формат журнала электронного дневника:</p>
+<ul>
+<li>Страницы с оценками: содержат «Наименование предмета», список учеников и оценки по датам</li>
+<li>Страницы учителей: содержат «Фамилия, имя, отчество учителя» и пройденный материал</li>
+</ul>
+</div>
+
+<div class="card">
+<h2>Скриншоты дашборда</h2>
+<div class="screenshot">
+📈 Обзор: радарная диаграмма, распределение учеников, прогноз итоговых<br><br>
+👤 Профиль ученика: лепестковая диаграмма, линейные графики по предметам, таблица оценок и НКИ
+</div>
+</div>
+
+<footer>
+<p>GradeReport — MIT License | <a href="https://github.com/Altersam/eljur_class_report" target="_blank">GitHub</a></p>
+</footer>
+</div>
+</body>
+</html>
