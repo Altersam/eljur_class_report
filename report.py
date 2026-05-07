@@ -30,7 +30,7 @@ def parse_pdf(pdf_path):
 
         if "Наименование предмета" in text:
             subj_name = extract_subject_name(text)
-            dates, student_grades = extract_grades_from_page(text)
+            dates, student_grades = extract_grades_from_page(page)
 
             if subj_name:
                 if subj_name not in subjects:
@@ -143,18 +143,8 @@ def extract_teacher_name(text):
     return None
 
 
-def extract_grades_from_page(text):
-    lines = text.split("\n")
-
-    date_start = None
-    for idx, line in enumerate(lines):
-        s = line.strip()
-        if re.search(r'\d{1,2}\s+\d{1,2}', s) and idx > 5:
-            date_start = idx
-            break
-
-    if date_start is None:
-        return [], {}
+def extract_grades_from_page(page):
+    blocks = page.get_text("dict")["blocks"]
 
     month_map = {
         "Январь": "01", "Февраль": "02", "Март": "03", "Апрель": "04",
@@ -162,60 +152,137 @@ def extract_grades_from_page(text):
         "Ноябрь": "11", "Декабрь": "12",
     }
 
-    # Find month headers before date_start
-    months_found = []
-    for idx in range(max(0, date_start - 10), date_start):
-        s = lines[idx].strip()
-        for m in month_map:
-            if s == m:
-                months_found.append((idx, m))
+    # Collect all spans with their coordinates
+    spans = []
+    for block in blocks:
+        if "lines" in block:
+            for line in block["lines"]:
+                for span in line["spans"]:
+                    text = span["text"].strip()
+                    if text:
+                        x0, y0, x1, y1 = span["bbox"]
+                        spans.append({"text": text, "x0": x0, "y0": y0, "x1": x1, "y1": y1})
 
-    first_month = months_found[0][1] if months_found else "Январь"
-    second_month = months_found[1][1] if len(months_found) > 1 else None
+    # Find month headers (y around 65-80)
+    month_spans = [s for s in spans if s["text"] in month_map and 65 < s["y0"] < 80]
+    month_spans.sort(key=lambda s: s["x0"])
 
-    # Collect dates, assigning months based on ПР/КР boundaries
+    # Find ПР/КР/СР boundaries (y around 95-110)
+    boundary_spans = [s for s in spans if s["text"] in ("ПР", "КР", "СР") and 95 < s["y0"] < 110]
+    boundary_spans.sort(key=lambda s: s["x0"])
+
+    # Date spans are numbers with y around 85-100
+    date_spans = [s for s in spans if re.match(r'^\d{1,2}$', s["text"]) and 85 < s["y0"] < 100]
+    date_spans.sort(key=lambda s: s["x0"])
+
+    # Build zones: each zone is (start_x, end_x, month_name)
+    # A zone starts at a month header or after a boundary, and ends at the next month/boundary
+    zones = []
+    month_names = list(month_map.keys())
+
+    for i, ms in enumerate(month_spans):
+        # Find boundaries after this month
+        boundaries_after = [b for b in boundary_spans if b["x0"] > ms["x0"]]
+
+        # Zone for current month: from month_x to first boundary after it
+        if boundaries_after:
+            zones.append((ms["x0"], boundaries_after[0]["x0"], ms["text"]))
+            # Zone after boundary = next month
+            next_boundary_x = boundaries_after[0]["x0"]
+            # Find end of this zone (next month or next boundary)
+            if i + 1 < len(month_spans):
+                zone_end = month_spans[i + 1]["x0"]
+            else:
+                # After last boundary, use next boundary or infinity
+                if len(boundaries_after) > 1:
+                    zone_end = boundaries_after[1]["x0"]
+                else:
+                    zone_end = float('inf')
+
+            # Determine next month name
+            if ms["text"] in month_names:
+                idx = month_names.index(ms["text"])
+                next_month = month_names[idx + 1] if idx + 1 < len(month_names) else ms["text"]
+            else:
+                next_month = ms["text"]
+
+            zones.append((next_boundary_x, zone_end, next_month))
+        else:
+            # No boundary, zone extends to next month
+            zone_end = month_spans[i + 1]["x0"] if i + 1 < len(month_spans) else float('inf')
+            zones.append((ms["x0"], zone_end, ms["text"]))
+
+    def get_month_for_date(date_x):
+        for start, end, month in zones:
+            if start <= date_x < end:
+                return month_map[month]
+        # Fallback
+        return month_map[month_spans[-1]["text"]] if month_spans else "01"
+
     all_dates = []
-    current_month = first_month
-    for idx in range(date_start, min(date_start + 5, len(lines))):
-        s = lines[idx].strip()
-        if s in ("ПР", "КР", "СР"):
-            if second_month:
-                current_month = second_month
-            continue
-        dates = re.findall(r'\d{1,2}', s)
-        for d in dates:
-            all_dates.append(f"{d.zfill(2)}.{month_map.get(current_month, '01')}")
+    for ds in date_spans:
+        month = get_month_for_date(ds["x0"])
+        all_dates.append(f"{ds['text'].zfill(2)}.{month}")
 
     num_dates = len(all_dates)
     if num_dates == 0:
         return [], {}
 
+    # Get date column x-centers
+    date_x_centers = [ds["x0"] + (ds["x1"] - ds["x0"]) / 2 for ds in date_spans]
+
+    # Find student rows and their grades
     student_grades = {}
-    idx = date_start + 5
-    while idx < len(lines):
-        line = lines[idx].strip()
-        m = re.match(r'^(\d+)\s+([А-ЯЁ][а-яё]+\s+[А-ЯЁА-ЯЁ][а-яёА-ЯЁ]+)', line)
-        if m:
-            name = m.group(2)
-            grade_tokens = []
-            j = idx + 1
-            while len(grade_tokens) < num_dates and j < len(lines):
-                gl = lines[j].strip()
-                if re.match(r'^\d+\s+[А-ЯЁ][а-яё]+\s+[А-ЯЁ]', gl):
+
+    # Find all student name spans (number followed by name on same Y)
+    # Use a wider Y tolerance for name matching
+    name_spans = []
+    for s in spans:
+        if re.match(r'^\d+$', s["text"]) and 100 < s["y0"] < 600:
+            for s2 in spans:
+                if (abs(s2["y0"] - s["y0"]) < 5 and
+                        s2["x0"] > s["x1"] and
+                        re.match(r'^[А-ЯЁ][а-яё]+', s2["text"])):
+                    name_spans.append({"num": s, "name": s2, "y": s["y0"]})
                     break
-                tokens = re.findall(r'[Н0-5]', gl)
-                for t in tokens:
-                    if len(grade_tokens) < num_dates:
-                        if t == 'Н':
-                            grade_tokens.append(0)
-                        elif t.isdigit():
-                            grade_tokens.append(int(t))
-                j += 1
-            if grade_tokens:
-                student_grades[name] = grade_tokens
-            idx = j
-        else:
-            idx += 1
+
+    for ns in name_spans:
+        student_y = ns["y"]
+        student_name = ns["name"]["text"]
+
+        # Initialize grades array with None
+        grades = [None] * num_dates
+
+        # Find grade spans on same Y row (within tolerance of 8)
+        for s in spans:
+            if abs(s["y0"] - student_y) < 8 and s["x0"] > 170:
+                s_center = s["x0"] + (s["x1"] - s["x0"]) / 2
+                best_col = -1
+                best_dist = 15
+                for col_idx, cx in enumerate(date_x_centers):
+                    dist = abs(s_center - cx)
+                    if dist < best_dist:
+                        best_dist = dist
+                        best_col = col_idx
+
+                if best_col >= 0:
+                    txt = s["text"]
+                    if txt == "Н":
+                        val = 0
+                    elif txt.isdigit():
+                        val = int(txt)
+                        if not (1 <= val <= 5):
+                            val = None
+                    else:
+                        val = None
+
+                    if val is not None:
+                        if grades[best_col] is None or (grades[best_col] == 0 and val > 0):
+                            grades[best_col] = val
+
+        # Fill None with 0
+        final_grades = [g if g is not None else 0 for g in grades]
+        student_grades[student_name] = final_grades
 
     return all_dates, student_grades
 
